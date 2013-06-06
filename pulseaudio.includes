@@ -1,0 +1,15 @@
+/home/lynxis/projects/pulseaudio/pulseaudio
+/home/lynxis/projects/pulseaudio/pulseaudio/src
+/home/lynxis/projects/pulseaudio/pulseaudio/src/daemon
+/home/lynxis/projects/pulseaudio/pulseaudio/src/modules
+/home/lynxis/projects/pulseaudio/pulseaudio/src/modules/alsa
+/home/lynxis/projects/pulseaudio/pulseaudio/src/modules/bluetooth
+/home/lynxis/projects/pulseaudio/pulseaudio/src/modules/dbus
+/home/lynxis/projects/pulseaudio/pulseaudio/src/modules/echo-cancel
+/home/lynxis/projects/pulseaudio/pulseaudio/src/modules/oss
+/home/lynxis/projects/pulseaudio/pulseaudio/src/modules/raop
+/home/lynxis/projects/pulseaudio/pulseaudio/src/modules/rtp
+/home/lynxis/projects/pulseaudio/pulseaudio/src/modules/xen
+/home/lynxis/projects/pulseaudio/pulseaudio/src/pulse
+/home/lynxis/projects/pulseaudio/pulseaudio/src/pulsecore
+/home/lynxis/projects/pulseaudio/pulseaudio/src/pulsecore/ffmpeg

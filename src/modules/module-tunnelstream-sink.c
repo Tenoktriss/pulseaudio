@@ -32,7 +32,7 @@
 #include <pulsecore/modargs.h>
 #include <pulsecore/log.h>
 
-#include "module-tunnelstream-symdef.h"
+#include "module-tunnelstream-sink-symdef.h"
 
 PA_MODULE_AUTHOR("Alexander Couzens");
 PA_MODULE_DESCRIPTION(_("Create a network sink which connects via a stream to a remote pulseserver"));

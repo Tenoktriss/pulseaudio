@@ -1368,7 +1368,7 @@ SYMDEF_FILES = \
 		module-ladspa-sink-symdef.h \
 		module-equalizer-sink-symdef.h \
 		module-match-symdef.h \
-		module-tunnelstream-symdef.h \
+		module-tunnelstream-sink-symdef.h \
 		module-tunnel-sink-symdef.h \
 		module-tunnel-source-symdef.h \
 		module-null-sink-symdef.h \

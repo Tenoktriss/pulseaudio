@@ -46,7 +46,7 @@ PA_MODULE_LOAD_ONCE(FALSE);
 PA_MODULE_USAGE(
         _("sink_name=<name of sink>"));
 
-#define DEFAULT_SINK_NAME "auto_null"
+#define DEFAULT_SINK_NAME "remote_sink"
 
 #define MEMBLOCKQ_MAXLENGTH (16*1024*1024)
 
@@ -155,7 +155,7 @@ int pa__init(pa_module*m) {
     pa_sink_new_data_set_channel_map(&sink_data, &map);
     // TODO: set DEVICE CLASS
     pa_proplist_sets(sink_data.proplist, PA_PROP_DEVICE_CLASS, "abstract");
-    pa_proplist_sets(sink_data.proplist, PA_PROP_DEVICE_DESCRIPTION, _("Null Output"));
+    pa_proplist_sets(sink_data.proplist, PA_PROP_DEVICE_DESCRIPTION, _("Remote Sinkd of _replace_me"));
 
     if (pa_modargs_get_proplist(ma, "sink_properties", sink_data.proplist, PA_UPDATE_REPLACE) < 0) {
         pa_log("Invalid properties");
@@ -190,7 +190,7 @@ int pa__init(pa_module*m) {
     }
 
 //    pa_sink_set_latency_range(u->sink, 0, BLOCK_USEC);
-// bis hierhin kommt er
+
     pa_sink_put(u->sink);
 
 //    u->memblockq = pa_memblockq_new("module-virtual-sink memblockq", 0, MEMBLOCKQ_MAXLENGTH, 0, &ss, 1, 1, 0, NULL);

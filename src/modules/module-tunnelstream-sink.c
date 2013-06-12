@@ -23,6 +23,7 @@
 #include <config.h>
 #endif
 
+#include <pulse/context.h>
 #include <pulse/rtclock.h>
 #include <pulse/timeval.h>
 #include <pulse/xmalloc.h>
@@ -36,6 +37,8 @@
 #include <pulsecore/thread.h>
 #include <pulsecore/thread-mq.h>
 #include <pulsecore/rtpoll.h>
+
+
 
 #include "module-tunnelstream-sink-symdef.h"
 
@@ -67,6 +70,9 @@ struct userdata {
     unsigned channels;
     pa_usec_t block_usec;
     pa_usec_t timestamp;
+
+    // libpulse context
+    pa_context *context;
 };
 
 static const char* const valid_modargs[] = {
@@ -117,12 +123,34 @@ finish:
     pa_log_debug("Thread shutting down");
 }
 
+
+void context_state_callback(pa_context *c, void *userdata) {
+    struct userdata *u = userdata;
+
+    switch(pa_context_get_state(c)) {
+        case PA_CONTEXT_UNCONNECTED:
+        case PA_CONTEXT_CONNECTING:
+        case PA_CONTEXT_AUTHORIZING:
+        case PA_CONTEXT_SETTING_NAME:
+            break;
+        case PA_CONTEXT_READY: {
+            break;
+        }
+        case PA_CONTEXT_FAILED:
+        case PA_CONTEXT_TERMINATED:
+        default:
+            return;
+    }
+}
+
 int pa__init(pa_module*m) {
-    struct userdata *u;
-    pa_modargs *ma;
+    struct userdata *u = NULL;
+    pa_modargs *ma = NULL;
     pa_sink_new_data sink_data;
     pa_sample_spec ss;
     pa_channel_map map;
+    pa_proplist *proplist = NULL;
+    char *remote_server = "10.4.2.179";
 //    pa_sink_input_new_data sink_input_data;
 
     pa_assert(m);
@@ -195,8 +223,28 @@ int pa__init(pa_module*m) {
 
 //    u->memblockq = pa_memblockq_new("module-virtual-sink memblockq", 0, MEMBLOCKQ_MAXLENGTH, 0, &ss, 1, 1, 0, NULL);
     pa_modargs_free(ma);
-
     // TODO: think about volume stuff remote<--stream--source
+
+    proplist = pa_proplist_new();
+    pa_proplist_sets(proplist, PA_PROP_APPLICATION_NAME, _("PulseAudio mod-tunnelstream"));
+    pa_proplist_sets(proplist, PA_PROP_APPLICATION_ID, "mod-tunnelstream");
+    pa_proplist_sets(proplist, PA_PROP_APPLICATION_ICON_NAME, "audio-card");
+    pa_proplist_sets(proplist, PA_PROP_APPLICATION_VERSION, PACKAGE_VERSION);
+
+    // init libpulse
+    u->context = pa_context_new_with_proplist(m->core->mainloop,
+                                              "tunnelstream",
+                                              proplist); /* no prop list for now */
+    pa_proplist_free(proplist);
+
+    pa_context_set_state_callback(u->context, context_state_callback, u);
+    if(pa_context_connect(u->context,
+                          remote_server,
+                          PA_CONTEXT_NOFAIL | PA_CONTEXT_NOAUTOSPAWN,
+                          NULL) < 0) {
+        goto fail;
+    }
+
 
     return 0;
 

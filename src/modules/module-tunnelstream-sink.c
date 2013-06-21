@@ -27,6 +27,7 @@
 #include <pulse/rtclock.h>
 #include <pulse/timeval.h>
 #include <pulse/xmalloc.h>
+#include <pulse/stream.h>
 
 #include <pulsecore/core.h>
 #include <pulsecore/core-util.h>
@@ -37,6 +38,7 @@
 #include <pulsecore/thread.h>
 #include <pulsecore/thread-mq.h>
 #include <pulsecore/rtpoll.h>
+#include <pulsecore/poll.h>
 
 
 
@@ -53,6 +55,9 @@ PA_MODULE_USAGE(
 
 #define MEMBLOCKQ_MAXLENGTH (16*1024*1024)
 
+/* libpulse callbacks */
+void stream_state_callback(pa_stream *stream, void *userdata);
+void context_state_callback(pa_context *c, void *userdata);
 
 struct userdata {
     pa_module *module;
@@ -60,10 +65,11 @@ struct userdata {
     pa_sink *sink;
     pa_sink_input *sink_input;
     pa_rtpoll *rtpoll;
+    pa_rtpoll_item *rtpoll_item;
     pa_thread_mq thread_mq;
     pa_thread *thread;
 
-    pa_memblockq *memblockq;
+    pa_memchunk memchunk;
 
     pa_bool_t auto_desc;
 
@@ -73,6 +79,10 @@ struct userdata {
 
     // libpulse context
     pa_context *context;
+    pa_stream *stream;
+
+    bool connected;
+    size_t block_size;
 };
 
 static const char* const valid_modargs[] = {
@@ -81,6 +91,11 @@ static const char* const valid_modargs[] = {
     "remote_server",
     "remote_port",
     NULL,
+};
+
+enum {
+    SINK_MESSAGE_PASS_SOCKET = PA_SINK_MESSAGE_MAX,
+    SINK_MESSAGE_RIP_SOCKET
 };
 
 static void thread_func(void *userdata) {
@@ -98,20 +113,57 @@ static void thread_func(void *userdata) {
     {
         pa_usec_t now = 0;
         int ret;
+        const void *p;
+        int written = 0;
+        size_t writeable = 0;
+
+        if (PA_UNLIKELY(u->sink->thread_info.rewind_requested))
+            pa_sink_process_rewind(u->sink, 0);
 
         if (PA_SINK_IS_OPENED(u->sink->thread_info.state))
             now = pa_rtclock_now();
 
-//        if (PA_UNLIKELY(u->sink->thread_info.rewind_requested))
-//            process_rewind(u, now);
+        if (u->connected &&
+                PA_STREAM_IS_GOOD(pa_stream_get_state(u->stream)) &&
+                PA_SINK_IS_OPENED(u->sink->thread_info.state)) {
+            /* TODO: use IS_RUNNING + cork stream */
+
+            if(pa_stream_is_corked(u->stream)) {
+                pa_stream_cork(u->stream, 0, NULL, NULL);
+            } else {
+                writeable = pa_stream_writable_size(u->stream);
+                if (writeable >= u->block_size) {
+                    if (u->memchunk.length <= 0)
+                        pa_sink_render(u->sink, u->block_size, &u->memchunk);
+
+                    pa_assert(u->memchunk.length > 0);
 
 
-        /* Hmm, nothing to do. Let's sleep */
+                    /* we have new data to write */
+                    p = (const uint8_t *) pa_memblock_acquire(u->memchunk.memblock);
+                    ret = pa_stream_write(u->stream,
+                                        ((uint8_t*) p + u->memchunk.index),         /**< The data to write */
+                                        u->memchunk.length,            /**< The length of the data to write in bytes */
+                                        NULL,     /**< A cleanup routine for the data or NULL to request an internal copy */
+                                        0,          /**< Offset for seeking, must be 0 for upload streams */
+                                        PA_SEEK_RELATIVE      /**< Seek mode, must be PA_SEEK_RELATIVE for upload streams */
+                                        );
+                    pa_memblock_release(u->memchunk.memblock);
+                    pa_memblock_unref(u->memchunk.memblock);
+                    pa_memchunk_reset(&u->memchunk);
+
+                    if(ret != 0) {
+                        pa_log_warn("Could not write data into the stream ... ret = %i", ret);
+                    }
+                }
+            }
+        }
         if ((ret = pa_rtpoll_run(u->rtpoll, TRUE)) < 0)
             goto fail;
 
         if (ret == 0)
             goto finish;
+
     }
 fail:
     /* If this was no regular exit from the loop we have to continue
@@ -123,6 +175,9 @@ finish:
     pa_log_debug("Thread shutting down");
 }
 
+void stream_state_callback(pa_stream *stream, void *userdata) {
+    struct userdata *u = userdata;
+}
 
 void context_state_callback(pa_context *c, void *userdata) {
     struct userdata *u = userdata;
@@ -132,15 +187,80 @@ void context_state_callback(pa_context *c, void *userdata) {
         case PA_CONTEXT_CONNECTING:
         case PA_CONTEXT_AUTHORIZING:
         case PA_CONTEXT_SETTING_NAME:
+            pa_log_debug("Connection unconnected");
             break;
         case PA_CONTEXT_READY: {
+            /* */
+            pa_log_debug("Connection successful. Creating stream.");
+            pa_assert(!u->stream);
+
+            pa_proplist *proplist = pa_proplist_new();
+            pa_assert(proplist);
+
+
+            u->stream = pa_stream_new_with_proplist(u->context,
+                                                    "mod-tunnelstream",
+                                                    &u->sink->sample_spec,
+                                                    &u->sink->channel_map,
+                                                    proplist);
+
+            pa_proplist_free(proplist);
+
+            pa_buffer_attr bufferattr;
+            memset(&bufferattr, 0, sizeof(pa_buffer_attr));
+
+            bufferattr.maxlength = (uint32_t) - 1;
+            bufferattr.minreq = (uint32_t) - 1;
+            bufferattr.prebuf = (uint32_t) - 1;
+            bufferattr.tlength = (uint32_t) - 1;
+
+            pa_stream_set_state_callback(u->stream, stream_state_callback, userdata);
+            pa_stream_connect_playback(u->stream, NULL, &bufferattr, 0, NULL, NULL);
+
+            pa_asyncmsgq_post(u->thread_mq.inq, PA_MSGOBJECT(u->sink), SINK_MESSAGE_PASS_SOCKET, NULL, 0, NULL, NULL);
             break;
         }
         case PA_CONTEXT_FAILED:
         case PA_CONTEXT_TERMINATED:
+            pa_log_debug("Connection terminated.");
+            u->connected = false;
+            break;
         default:
-            return;
+            break;
     }
+}
+
+static int sink_process_msg_cb(pa_msgobject *o, int code, void *data, int64_t offset, pa_memchunk *chunk) {
+    struct userdata *u = PA_SINK(o)->userdata;
+
+    switch (code) {
+
+        case PA_SINK_MESSAGE_GET_LATENCY: {
+
+            /* The sink is _put() before the sink input is, so let's
+             * make sure we don't access it in that time. Also, the
+             * sink input is first shut down, the sink second. */
+            if (!PA_SINK_IS_LINKED(u->sink->thread_info.state)) {
+                *((pa_usec_t*) data) = 0;
+                return 0;
+            }
+
+            *((pa_usec_t*) data) =
+
+                /* Get the latency from libpulse TODO */
+                200 +
+
+                /* Add the latency internal to our sink input on top */
+                pa_bytes_to_usec(u->memchunk.length, &u->sink->sample_spec);
+
+            return 0;
+        }
+        case SINK_MESSAGE_PASS_SOCKET: {
+            u->connected = true;
+            return 0;
+        }
+    }
+    return pa_sink_process_msg(o, code, data, offset, chunk);
 }
 
 int pa__init(pa_module*m) {
@@ -150,7 +270,8 @@ int pa__init(pa_module*m) {
     pa_sample_spec ss;
     pa_channel_map map;
     pa_proplist *proplist = NULL;
-    char *remote_server = "10.4.2.179";
+    const char *remote_server = "10.4.2.139";
+//    const char *remote_server = "10.0.0.241";
 //    pa_sink_input_new_data sink_input_data;
 
     pa_assert(m);
@@ -170,6 +291,7 @@ int pa__init(pa_module*m) {
     u = pa_xnew0(struct userdata, 1);
     u->module = m;
     m->userdata = u;
+    pa_memchunk_reset(&u->memchunk);
     u->rtpoll = pa_rtpoll_new();
     pa_thread_mq_init(&u->thread_mq, m->core->mainloop, u->rtpoll);
 
@@ -181,6 +303,8 @@ int pa__init(pa_module*m) {
     pa_sink_new_data_set_name(&sink_data, pa_modargs_get_value(ma, "sink_name", DEFAULT_SINK_NAME));
     pa_sink_new_data_set_sample_spec(&sink_data, &ss);
     pa_sink_new_data_set_channel_map(&sink_data, &map);
+    u->block_size = pa_usec_to_bytes(PA_USEC_PER_SEC/20, &ss);
+
     // TODO: set DEVICE CLASS
     pa_proplist_sets(sink_data.proplist, PA_PROP_DEVICE_CLASS, "abstract");
     pa_proplist_sets(sink_data.proplist, PA_PROP_DEVICE_DESCRIPTION, _("Remote Sinkd of _replace_me"));
@@ -198,8 +322,9 @@ int pa__init(pa_module*m) {
         pa_log("Failed to create sink.");
         goto fail;
     }
-
     u->sink->userdata = u;
+    u->sink->parent.process_msg = sink_process_msg_cb;
+
     /* callbacks */
 //    u->sink->parent.process_msg = sink_process_msg;
 //    u->sink->update_requested_latency = sink_update_requested_latency_cb;
@@ -212,17 +337,11 @@ int pa__init(pa_module*m) {
 //    pa_sink_set_max_rewind(u->sink, nbytes);
 //    pa_sink_set_max_request(u->sink, nbytes);
 
-    if (!(u->thread = pa_thread_new("tunnelstream-sink", thread_func, u))) {
-        pa_log("Failed to create thread.");
-        goto fail;
-    }
 
 //    pa_sink_set_latency_range(u->sink, 0, BLOCK_USEC);
 
-    pa_sink_put(u->sink);
 
 //    u->memblockq = pa_memblockq_new("module-virtual-sink memblockq", 0, MEMBLOCKQ_MAXLENGTH, 0, &ss, 1, 1, 0, NULL);
-    pa_modargs_free(ma);
     // TODO: think about volume stuff remote<--stream--source
 
     proplist = pa_proplist_new();
@@ -244,6 +363,15 @@ int pa__init(pa_module*m) {
                           NULL) < 0) {
         goto fail;
     }
+
+    if (!(u->thread = pa_thread_new("tunnelstream-sink", thread_func, u))) {
+        pa_log("Failed to create thread.");
+        goto fail;
+    }
+
+    pa_sink_put(u->sink);
+    pa_modargs_free(ma);
+
 
 
     return 0;
@@ -280,8 +408,11 @@ void pa__done(pa_module*m) {
     if (u->sink)
         pa_sink_unref(u->sink);
 
-    if (u->memblockq)
-        pa_memblockq_free(u->memblockq);
+//    if (u->memblockq)
+//        pa_memblockq_free(u->memblockq);
 
     pa_xfree(u);
 }
+
+
+// TODO: reconnect as flag

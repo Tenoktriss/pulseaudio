@@ -80,7 +80,6 @@ struct userdata {
     pa_stream *stream;
 
     bool connected;
-    size_t block_size;
 };
 
 static const char* const valid_modargs[] = {
@@ -129,9 +128,9 @@ static void thread_func(void *userdata) {
                 pa_stream_cork(u->stream, 0, NULL, NULL);
             } else {
                 writeable = pa_stream_writable_size(u->stream);
-                if (writeable >= u->block_size) {
+                if (writeable > 0) {
                     if (u->memchunk.length <= 0)
-                        pa_sink_render(u->sink, u->block_size, &u->memchunk);
+                        pa_sink_render(u->sink, writeable, &u->memchunk);
 
                     pa_assert(u->memchunk.length > 0);
 
@@ -336,7 +335,6 @@ int pa__init(pa_module*m) {
     pa_sink_new_data_set_name(&sink_data, pa_modargs_get_value(ma, "sink_name", DEFAULT_SINK_NAME));
     pa_sink_new_data_set_sample_spec(&sink_data, &ss);
     pa_sink_new_data_set_channel_map(&sink_data, &map);
-    u->block_size = pa_usec_to_bytes(PA_USEC_PER_SEC/20, &ss);
 
     // TODO: set DEVICE CLASS
     pa_proplist_sets(sink_data.proplist, PA_PROP_DEVICE_CLASS, "abstract");

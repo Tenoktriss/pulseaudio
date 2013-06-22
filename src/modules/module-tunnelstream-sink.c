@@ -311,7 +311,7 @@ int pa__init(pa_module*m) {
 
     // TODO: set DEVICE CLASS
     pa_proplist_sets(sink_data.proplist, PA_PROP_DEVICE_CLASS, "abstract");
-    pa_proplist_sets(sink_data.proplist, PA_PROP_DEVICE_DESCRIPTION, _("Remote Sinkd of _replace_me"));
+    pa_proplist_sets(sink_data.proplist, PA_PROP_DEVICE_DESCRIPTION, _("Remote Sink of _replace_me"));
 
     if (pa_modargs_get_proplist(ma, "sink_properties", sink_data.proplist, PA_UPDATE_REPLACE) < 0) {
         pa_log("Invalid properties");
@@ -319,33 +319,29 @@ int pa__init(pa_module*m) {
         goto fail;
     }
 
-    u->sink = pa_sink_new(m->core, &sink_data, (PA_SINK_LATENCY|PA_SINK_DYNAMIC_LATENCY));
-    pa_sink_new_data_done(&sink_data);
-
-    if (!u->sink) {
+    if (!(u->sink = pa_sink_new(m->core, &sink_data, (PA_SINK_LATENCY|PA_SINK_DYNAMIC_LATENCY)))) {
         pa_log("Failed to create sink.");
+        pa_sink_new_data_done(&sink_data);
         goto fail;
     }
+
+    pa_sink_new_data_done(&sink_data);
     u->sink->userdata = u;
-    u->sink->parent.process_msg = sink_process_msg_cb;
 
     /* callbacks */
-//    u->sink->parent.process_msg = sink_process_msg;
+    u->sink->parent.process_msg = sink_process_msg_cb;
 //    u->sink->update_requested_latency = sink_update_requested_latency_cb;
+
+    /* set thread queue */
     pa_sink_set_asyncmsgq(u->sink, u->thread_mq.inq);
     pa_sink_set_rtpoll(u->sink, u->rtpoll);
-
 
 //    u->block_usec = BLOCK_USEC;
 //    nbytes = pa_usec_to_bytes(u->block_usec, &u->sink->sample_spec);
 //    pa_sink_set_max_rewind(u->sink, nbytes);
 //    pa_sink_set_max_request(u->sink, nbytes);
-
-
 //    pa_sink_set_latency_range(u->sink, 0, BLOCK_USEC);
 
-
-//    u->memblockq = pa_memblockq_new("module-virtual-sink memblockq", 0, MEMBLOCKQ_MAXLENGTH, 0, &ss, 1, 1, 0, NULL);
     // TODO: think about volume stuff remote<--stream--source
 
     proplist = pa_proplist_new();
@@ -355,9 +351,13 @@ int pa__init(pa_module*m) {
     pa_proplist_sets(proplist, PA_PROP_APPLICATION_VERSION, PACKAGE_VERSION);
 
     // init libpulse
-    u->context = pa_context_new_with_proplist(m->core->mainloop,
+    if(!(u->context = pa_context_new_with_proplist(m->core->mainloop,
                                               "tunnelstream",
-                                              proplist); /* no prop list for now */
+                                              proplist))) {
+        pa_log("Failed to create libpulse context");
+        goto fail;
+    }
+
     pa_proplist_free(proplist);
 
     pa_context_set_state_callback(u->context, context_state_callback, u);
@@ -365,6 +365,7 @@ int pa__init(pa_module*m) {
                           remote_server,
                           PA_CONTEXT_NOFAIL | PA_CONTEXT_NOAUTOSPAWN,
                           NULL) < 0) {
+        pa_log("Failed to connect libpulse context");
         goto fail;
     }
 

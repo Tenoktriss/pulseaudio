@@ -241,8 +241,16 @@ void context_state_callback(pa_context *c, void *userdata) {
             break;
         }
         case PA_CONTEXT_FAILED:
+            pa_log_debug("Context failed.");
+            pa_context_unref(u->context);
+//            u->context = NULL;
+            u->connected = false;
+            break;
+
         case PA_CONTEXT_TERMINATED:
-            pa_log_debug("Connection terminated.");
+            pa_log_debug("Context terminated.");
+            pa_context_unref(u->context);
+//            u->context = NULL;
             u->connected = false;
             break;
         default:

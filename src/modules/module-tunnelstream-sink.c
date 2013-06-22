@@ -56,8 +56,8 @@ PA_MODULE_USAGE(
 #define MEMBLOCKQ_MAXLENGTH (16*1024*1024)
 
 /* libpulse callbacks */
-void stream_state_callback(pa_stream *stream, void *userdata);
-void context_state_callback(pa_context *c, void *userdata);
+static void stream_state_callback(pa_stream *stream, void *userdata);
+static void context_state_callback(pa_context *c, void *userdata);
 
 struct userdata {
     pa_module *module;
@@ -171,7 +171,7 @@ finish:
     pa_log_debug("Thread shutting down");
 }
 
-void stream_state_callback(pa_stream *stream, void *userdata) {
+static void stream_state_callback(pa_stream *stream, void *userdata) {
     struct userdata *u = userdata;
 
     pa_assert(u);
@@ -195,7 +195,7 @@ void stream_state_callback(pa_stream *stream, void *userdata) {
     }
 }
 
-void context_state_callback(pa_context *c, void *userdata) {
+static void context_state_callback(pa_context *c, void *userdata) {
     struct userdata *u = userdata;
 
     pa_assert(u);

@@ -376,13 +376,14 @@ int pa__init(pa_module*m) {
     pa_sink_put(u->sink);
     pa_modargs_free(ma);
 
-
-
     return 0;
 
 fail:
     if (ma)
         pa_modargs_free(ma);
+
+    if (proplist)
+        pa_proplist_free(proplist);
 
     pa__done(m);
 
@@ -397,18 +398,20 @@ void pa__done(pa_module*m) {
     if (!(u = m->userdata))
         return;
 
-    /* See comments in sink_input_kill_cb() above regarding
-     * destruction order! */
+    // TODO: is the thread shutted down by sink_unlink?
+    // TODO: check rtpoll freeded in a clean way.
 
+    if (u->stream)
+        pa_stream_disconnect(u->stream);
+
+    if (u->context)
+        pa_context_disconnect(u->context);
 
     if (u->sink)
         pa_sink_unlink(u->sink);
 
     if (u->sink)
         pa_sink_unref(u->sink);
-
-//    if (u->memblockq)
-//        pa_memblockq_free(u->memblockq);
 
     pa_xfree(u);
 }

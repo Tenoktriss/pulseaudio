@@ -89,7 +89,6 @@ static const char* const valid_modargs[] = {
     "sink_name",
     "sink_properties",
     "remote_server",
-    "remote_port",
     NULL,
 };
 
@@ -270,8 +269,7 @@ int pa__init(pa_module*m) {
     pa_sample_spec ss;
     pa_channel_map map;
     pa_proplist *proplist = NULL;
-    const char *remote_server = "10.4.2.139";
-//    const char *remote_server = "10.0.0.241";
+    const char *remote_server = NULL;
 //    pa_sink_input_new_data sink_input_data;
 
     pa_assert(m);
@@ -285,6 +283,12 @@ int pa__init(pa_module*m) {
     map = m->core->default_channel_map;
     if (pa_modargs_get_sample_spec_and_channel_map(ma, &ss, &map, PA_CHANNEL_MAP_DEFAULT) < 0) {
         pa_log("Invalid sample format specification or channel map");
+        goto fail;
+    }
+
+    remote_server = pa_modargs_get_value(ma, "remote_server", NULL);
+    if(!remote_server) {
+        pa_log("No remote_server given!");
         goto fail;
     }
 

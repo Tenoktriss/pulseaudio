@@ -64,7 +64,6 @@ struct userdata {
 
     pa_sink *sink;
     pa_rtpoll *rtpoll;
-    pa_rtpoll_item *rtpoll_item;
     pa_thread_mq thread_mq;
     pa_thread *thread;
 

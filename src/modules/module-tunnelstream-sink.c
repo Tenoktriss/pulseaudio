@@ -63,7 +63,6 @@ struct userdata {
     pa_module *module;
 
     pa_sink *sink;
-    pa_sink_input *sink_input;
     pa_rtpoll *rtpoll;
     pa_rtpoll_item *rtpoll_item;
     pa_thread_mq thread_mq;
@@ -401,14 +400,9 @@ void pa__done(pa_module*m) {
     /* See comments in sink_input_kill_cb() above regarding
      * destruction order! */
 
-    if (u->sink_input)
-        pa_sink_input_unlink(u->sink_input);
 
     if (u->sink)
         pa_sink_unlink(u->sink);
-
-    if (u->sink_input)
-        pa_sink_input_unref(u->sink_input);
 
     if (u->sink)
         pa_sink_unref(u->sink);

@@ -436,9 +436,6 @@ void pa__done(pa_module*m) {
 
     pa_thread_mq_done(&u->thread_mq);
 
-    // TODO: is the thread shutted down by sink_unlink?
-    // TODO: check rtpoll freeded in a clean way.
-
     if (u->stream) {
         pa_stream_disconnect(u->stream);
     }

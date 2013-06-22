@@ -174,10 +174,33 @@ finish:
 
 void stream_state_callback(pa_stream *stream, void *userdata) {
     struct userdata *u = userdata;
+
+    pa_assert(u);
+    pa_assert(stream == u->stream);
+
+    switch(pa_stream_get_state(stream)) {
+        case PA_STREAM_FAILED:
+            pa_log_debug("Context failed.");
+            pa_stream_unref(stream);
+            /* TODO: think about NULL setting of stream/context */
+//            u->stream = NULL;
+            /* TODO: think about killing the context or should we just try again a creationg of a stream ? */
+            break;
+        case PA_STREAM_TERMINATED:
+            pa_log_debug("Context terminated.");
+            pa_stream_unref(stream);
+//            u->stream = NULL;
+            break;
+        default:
+            break;
+    }
 }
 
 void context_state_callback(pa_context *c, void *userdata) {
     struct userdata *u = userdata;
+
+    pa_assert(u);
+    pa_assert(u->context == c);
 
     switch(pa_context_get_state(c)) {
         case PA_CONTEXT_UNCONNECTED:

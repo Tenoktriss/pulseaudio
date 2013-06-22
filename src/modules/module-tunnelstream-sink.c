@@ -124,7 +124,7 @@ static void thread_func(void *userdata) {
                 PA_SINK_IS_OPENED(u->sink->thread_info.state)) {
             /* TODO: use IS_RUNNING + cork stream */
 
-            if(pa_stream_is_corked(u->stream)) {
+            if (pa_stream_is_corked(u->stream)) {
                 pa_stream_cork(u->stream, 0, NULL, NULL);
             } else {
                 writeable = pa_stream_writable_size(u->stream);
@@ -148,7 +148,8 @@ static void thread_func(void *userdata) {
                     pa_memblock_unref(u->memchunk.memblock);
                     pa_memchunk_reset(&u->memchunk);
 
-                    if(ret != 0) {
+                    if (ret != 0) {
+                        /* TODO: we should consider a state change or is that already done ? */
                         pa_log_warn("Could not write data into the stream ... ret = %i", ret);
                     }
                 }
@@ -315,7 +316,7 @@ int pa__init(pa_module*m) {
     }
 
     remote_server = pa_modargs_get_value(ma, "remote_server", NULL);
-    if(!remote_server) {
+    if (!remote_server) {
         pa_log("No remote_server given!");
         goto fail;
     }
@@ -378,7 +379,7 @@ int pa__init(pa_module*m) {
     pa_proplist_sets(proplist, PA_PROP_APPLICATION_VERSION, PACKAGE_VERSION);
 
     // init libpulse
-    if(!(u->context = pa_context_new_with_proplist(m->core->mainloop,
+    if (!(u->context = pa_context_new_with_proplist(m->core->mainloop,
                                               "tunnelstream",
                                               proplist))) {
         pa_log("Failed to create libpulse context");
@@ -388,7 +389,7 @@ int pa__init(pa_module*m) {
     pa_proplist_free(proplist);
 
     pa_context_set_state_callback(u->context, context_state_callback, u);
-    if(pa_context_connect(u->context,
+    if (pa_context_connect(u->context,
                           remote_server,
                           PA_CONTEXT_NOFAIL | PA_CONTEXT_NOAUTOSPAWN,
                           NULL) < 0) {

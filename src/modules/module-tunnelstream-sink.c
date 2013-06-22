@@ -428,17 +428,32 @@ void pa__done(pa_module*m) {
     if (!(u = m->userdata))
         return;
 
+    if (u->sink)
+        pa_sink_unlink(u->sink);
+
+    if (u->thread) {
+        pa_asyncmsgq_send(u->thread_mq.inq, NULL, PA_MESSAGE_SHUTDOWN, NULL, 0, NULL);
+        pa_thread_free(u->thread);
+    }
+
+    pa_thread_mq_done(&u->thread_mq);
+
     // TODO: is the thread shutted down by sink_unlink?
     // TODO: check rtpoll freeded in a clean way.
 
-    if (u->stream)
+    if (u->stream) {
         pa_stream_disconnect(u->stream);
+    }
 
-    if (u->context)
+    if (u->context) {
         pa_context_disconnect(u->context);
+    }
 
-    if (u->sink)
-        pa_sink_unlink(u->sink);
+    if (u->rtpoll)
+        pa_rtpoll_free(u->rtpoll);
+
+    if (u->memchunk.memblock)
+        pa_memblock_unref(u->memchunk.memblock);
 
     if (u->sink)
         pa_sink_unref(u->sink);

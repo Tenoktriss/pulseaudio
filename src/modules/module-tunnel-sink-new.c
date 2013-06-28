@@ -40,7 +40,7 @@
 #include <pulsecore/rtpoll.h>
 #include <pulsecore/poll.h>
 
-#include "module-tunnelstream-sink-symdef.h"
+#include "module-tunnel-sink-new-symdef.h"
 
 PA_MODULE_AUTHOR("Alexander Couzens");
 PA_MODULE_DESCRIPTION(_("Create a network sink which connects via a stream to a remote pulseserver"));
@@ -104,10 +104,10 @@ static void thread_func(void *userdata) {
 
     for(;;)
     {
-        pa_usec_t now = 0;
         int ret;
         const void *p;
-        int written = 0;
+        pa_usec_t now = 0;
+
         size_t writeable = 0;
 
         if (PA_UNLIKELY(u->sink->thread_info.rewind_requested))
@@ -206,11 +206,13 @@ static void context_state_callback(pa_context *c, void *userdata) {
             pa_log_debug("Connection unconnected");
             break;
         case PA_CONTEXT_READY: {
-            /* */
+            pa_proplist *proplist;
+            pa_buffer_attr bufferattr;
+
             pa_log_debug("Connection successful. Creating stream.");
             pa_assert(!u->stream);
 
-            pa_proplist *proplist = pa_proplist_new();
+            proplist = pa_proplist_new();
             pa_assert(proplist);
 
 
@@ -222,7 +224,7 @@ static void context_state_callback(pa_context *c, void *userdata) {
 
             pa_proplist_free(proplist);
 
-            pa_buffer_attr bufferattr;
+
             memset(&bufferattr, 0, sizeof(pa_buffer_attr));
 
             bufferattr.maxlength = (uint32_t) - 1;

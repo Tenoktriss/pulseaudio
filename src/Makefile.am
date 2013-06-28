@@ -1097,7 +1097,7 @@ modlibexec_LTLIBRARIES += \
 		module-remap-sink.la \
 		module-remap-source.la \
 		module-ladspa-sink.la \
-		module-tunnelstream-sink.la \
+		module-tunnel-sink-new.la \
 		module-tunnel-sink.la \
 		module-tunnel-source.la \
 		module-position-event-sounds.la \
@@ -1368,7 +1368,7 @@ SYMDEF_FILES = \
 		module-ladspa-sink-symdef.h \
 		module-equalizer-sink-symdef.h \
 		module-match-symdef.h \
-		module-tunnelstream-sink-symdef.h \
+		module-tunnel-sink-new-symdef.h \
 		module-tunnel-sink-symdef.h \
 		module-tunnel-source-symdef.h \
 		module-null-sink-symdef.h \
@@ -1639,10 +1639,10 @@ module_match_la_SOURCES = modules/module-match.c
 module_match_la_LDFLAGS = $(MODULE_LDFLAGS)
 module_match_la_LIBADD = $(MODULE_LIBADD)
 
-module_tunnelstream_sink_la_SOURCES = modules/module-tunnelstream-sink.c
-module_tunnelstream_sink_la_CFLAGS = -DTUNNELSTREAM_SINK=1 $(AM_CFLAGS)
-module_tunnelstream_sink_la_LDFLAGS = $(MODULE_LDFLAGS)
-module_tunnelstream_sink_la_LIBADD = $(MODULE_LIBADD)
+module_tunnel_sink_new_la_SOURCES = modules/module-tunnel-sink-new.c
+module_tunnel_sink_new_la_CFLAGS = -DTUNNEL_SINK_NEW=1 $(AM_CFLAGS)
+module_tunnel_sink_new_la_LDFLAGS = $(MODULE_LDFLAGS)
+module_tunnel_sink_new_la_LIBADD = $(MODULE_LIBADD)
 
 module_tunnel_sink_la_SOURCES = modules/module-tunnel.c
 module_tunnel_sink_la_CFLAGS = -DTUNNEL_SINK=1 $(AM_CFLAGS)

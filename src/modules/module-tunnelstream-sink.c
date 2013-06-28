@@ -40,16 +40,13 @@
 #include <pulsecore/rtpoll.h>
 #include <pulsecore/poll.h>
 
-
-
 #include "module-tunnelstream-sink-symdef.h"
 
 PA_MODULE_AUTHOR("Alexander Couzens");
 PA_MODULE_DESCRIPTION(_("Create a network sink which connects via a stream to a remote pulseserver"));
 PA_MODULE_VERSION(PACKAGE_VERSION);
 PA_MODULE_LOAD_ONCE(FALSE);
-PA_MODULE_USAGE(
-        _("sink_name=<name of sink>"));
+PA_MODULE_USAGE(_("sink_name=<name of sink>"));
 
 #define DEFAULT_SINK_NAME "remote_sink"
 
@@ -182,14 +179,13 @@ static void stream_state_callback(pa_stream *stream, void *userdata) {
         case PA_STREAM_FAILED:
             pa_log_debug("Context failed.");
             pa_stream_unref(stream);
-            /* TODO: think about NULL setting of stream/context */
-//            u->stream = NULL;
+            u->stream = NULL;
             /* TODO: think about killing the context or should we just try again a creationg of a stream ? */
             break;
         case PA_STREAM_TERMINATED:
             pa_log_debug("Context terminated.");
             pa_stream_unref(stream);
-//            u->stream = NULL;
+            u->stream = NULL;
             break;
         default:
             break;
@@ -243,14 +239,14 @@ static void context_state_callback(pa_context *c, void *userdata) {
         case PA_CONTEXT_FAILED:
             pa_log_debug("Context failed.");
             pa_context_unref(u->context);
-//            u->context = NULL;
+            u->context = NULL;
             u->connected = false;
             break;
 
         case PA_CONTEXT_TERMINATED:
             pa_log_debug("Context terminated.");
             pa_context_unref(u->context);
-//            u->context = NULL;
+            u->context = NULL;
             u->connected = false;
             break;
         default:
@@ -299,7 +295,6 @@ int pa__init(pa_module*m) {
     pa_channel_map map;
     pa_proplist *proplist = NULL;
     const char *remote_server = NULL;
-//    pa_sink_input_new_data sink_input_data;
 
     pa_assert(m);
 
@@ -337,7 +332,7 @@ int pa__init(pa_module*m) {
     pa_sink_new_data_set_sample_spec(&sink_data, &ss);
     pa_sink_new_data_set_channel_map(&sink_data, &map);
 
-    // TODO: set DEVICE CLASS
+    /* TODO: set DEVICE CLASS */
     pa_proplist_sets(sink_data.proplist, PA_PROP_DEVICE_CLASS, "abstract");
     pa_proplist_sets(sink_data.proplist, PA_PROP_DEVICE_DESCRIPTION, _("Remote Sink of _replace_me"));
 
@@ -347,7 +342,7 @@ int pa__init(pa_module*m) {
         goto fail;
     }
     /* TODO: check PA_SINK_LATENCY + PA_SINK_DYNAMIC_LATENCY */
-    if (!(u->sink = pa_sink_new(m->core, &sink_data, (PA_SINK_LATENCY|PA_SINK_DYNAMIC_LATENCY|PA_SINK_NETWORK))) {
+    if (!(u->sink = pa_sink_new(m->core, &sink_data, (PA_SINK_LATENCY|PA_SINK_DYNAMIC_LATENCY|PA_SINK_NETWORK)))) {
         pa_log("Failed to create sink.");
         pa_sink_new_data_done(&sink_data);
         goto fail;
@@ -358,27 +353,28 @@ int pa__init(pa_module*m) {
 
     /* callbacks */
     u->sink->parent.process_msg = sink_process_msg_cb;
-//    u->sink->update_requested_latency = sink_update_requested_latency_cb;
+
 
     /* set thread queue */
     pa_sink_set_asyncmsgq(u->sink, u->thread_mq.inq);
     pa_sink_set_rtpoll(u->sink, u->rtpoll);
 
-//    u->block_usec = BLOCK_USEC;
-//    nbytes = pa_usec_to_bytes(u->block_usec, &u->sink->sample_spec);
-//    pa_sink_set_max_rewind(u->sink, nbytes);
-//    pa_sink_set_max_request(u->sink, nbytes);
-//    pa_sink_set_latency_range(u->sink, 0, BLOCK_USEC);
+    /* TODO: latency / rewind
+    u->sink->update_requested_latency = sink_update_requested_latency_cb;
+    u->block_usec = BLOCK_USEC;
+    nbytes = pa_usec_to_bytes(u->block_usec, &u->sink->sample_spec);
+    pa_sink_set_max_rewind(u->sink, nbytes);
+    pa_sink_set_max_request(u->sink, nbytes);
+    pa_sink_set_latency_range(u->sink, 0, BLOCK_USEC); */
 
-    // TODO: think about volume stuff remote<--stream--source
-
+    /* TODO: think about volume stuff remote<--stream--source */
     proplist = pa_proplist_new();
     pa_proplist_sets(proplist, PA_PROP_APPLICATION_NAME, _("PulseAudio mod-tunnelstream"));
     pa_proplist_sets(proplist, PA_PROP_APPLICATION_ID, "mod-tunnelstream");
     pa_proplist_sets(proplist, PA_PROP_APPLICATION_ICON_NAME, "audio-card");
     pa_proplist_sets(proplist, PA_PROP_APPLICATION_VERSION, PACKAGE_VERSION);
 
-    // init libpulse
+    /* init libpulse */
     if (!(u->context = pa_context_new_with_proplist(m->core->mainloop,
                                               "tunnelstream",
                                               proplist))) {
@@ -437,13 +433,11 @@ void pa__done(pa_module*m) {
 
     pa_thread_mq_done(&u->thread_mq);
 
-    if (u->stream) {
+    if (u->stream)
         pa_stream_disconnect(u->stream);
-    }
 
-    if (u->context) {
+    if (u->context)
         pa_context_disconnect(u->context);
-    }
 
     if (u->rtpoll)
         pa_rtpoll_free(u->rtpoll);
@@ -456,6 +450,3 @@ void pa__done(pa_module*m) {
 
     pa_xfree(u);
 }
-
-
-// TODO: reconnect as flag

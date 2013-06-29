@@ -233,7 +233,12 @@ static void context_state_callback(pa_context *c, void *userdata) {
             bufferattr.tlength = (uint32_t) - 1;
 
             pa_stream_set_state_callback(u->stream, stream_state_callback, userdata);
-            pa_stream_connect_playback(u->stream, NULL, &bufferattr, 0, NULL, NULL);
+            pa_stream_connect_playback(u->stream,
+                                       NULL,
+                                       &bufferattr,
+                                       PA_STREAM_START_CORKED | PA_STREAM_AUTO_TIMING_UPDATE,
+                                       NULL,
+                                       NULL);
 
             pa_asyncmsgq_post(u->thread_mq.inq, PA_MSGOBJECT(u->sink), SINK_MESSAGE_PASS_SOCKET, NULL, 0, NULL, NULL);
             break;
@@ -262,23 +267,23 @@ static int sink_process_msg_cb(pa_msgobject *o, int code, void *data, int64_t of
     switch (code) {
 
         case PA_SINK_MESSAGE_GET_LATENCY: {
+            int negative;
+            pa_usec_t remote_latency;
 
-            /* The sink is _put() before the sink input is, so let's
-             * make sure we don't access it in that time. Also, the
-             * sink input is first shut down, the sink second. */
             if (!PA_SINK_IS_LINKED(u->sink->thread_info.state)) {
                 *((pa_usec_t*) data) = 0;
                 return 0;
             }
 
+            if(pa_stream_get_latency(u->stream, &remote_latency, &negative) < 0) {
+                *((pa_usec_t*) data) = 0;
+                return 0;
+            }
+
             *((pa_usec_t*) data) =
-
-                /* Get the latency from libpulse TODO */
-                200 +
-
-                /* Add the latency internal to our sink input on top */
-                pa_bytes_to_usec(u->memchunk.length, &u->sink->sample_spec);
-
+                /* Add the latency from libpulse */
+                remote_latency;
+                /* do we have to add more latency here ? */
             return 0;
         }
         case SINK_MESSAGE_PASS_SOCKET: {

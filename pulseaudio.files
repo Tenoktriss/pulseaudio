@@ -371,7 +371,7 @@ src/modules/module-switch-on-connect.c
 src/modules/module-switch-on-port-available.c
 src/modules/module-systemd-login.c
 src/modules/module-tunnel.c
-src/modules/module-tunnelstream-sink.c
+src/modules/module-tunnel-sink-new.c
 src/modules/module-udev-detect.c
 src/modules/module-virtual-sink.c
 src/modules/module-virtual-source.c

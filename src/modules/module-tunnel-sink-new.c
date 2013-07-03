@@ -28,6 +28,7 @@
 #include <pulse/timeval.h>
 #include <pulse/xmalloc.h>
 #include <pulse/stream.h>
+#include <pulse/mainloop.h>
 
 #include <pulsecore/core.h>
 #include <pulsecore/core-util.h>
@@ -77,6 +78,9 @@ struct userdata {
     pa_stream *stream;
 
     bool connected;
+
+    pa_mainloop *mainloop;
+    int mainloop_ret;
 };
 
 static const char* const valid_modargs[] = {
@@ -93,14 +97,36 @@ enum {
 
 static void thread_func(void *userdata) {
     struct userdata *u = userdata;
+    pa_proplist *proplist;
 
     pa_assert(u);
 
     pa_log_debug("Tunnelstream: Thread starting up");
 
     pa_thread_mq_install(&u->thread_mq);
-
     u->timestamp = pa_rtclock_now();
+
+    u->mainloop = pa_mainloop_new();
+
+    if(u->mainloop == NULL) {
+        pa_log("Failed to create mainloop");
+        goto fail;
+    }
+    /* TODO: think about volume stuff remote<--stream--source */
+    proplist = pa_proplist_new();
+    pa_proplist_sets(proplist, PA_PROP_APPLICATION_NAME, _("PulseAudio mod-tunnelstream"));
+    pa_proplist_sets(proplist, PA_PROP_APPLICATION_ID, "mod-tunnelstream");
+    pa_proplist_sets(proplist, PA_PROP_APPLICATION_ICON_NAME, "audio-card");
+    pa_proplist_sets(proplist, PA_PROP_APPLICATION_VERSION, PACKAGE_VERSION);
+
+    /* init libpulse */
+    if (!(u->context = pa_context_new_with_proplist(pa_mainloop_get_api(u->mainloop),
+                                              "tunnelstream",
+                                              proplist))) {
+        pa_log("Failed to create libpulse context");
+        goto fail;
+    }
+    pa_proplist_free(proplist);
 
     for(;;)
     {
@@ -109,6 +135,10 @@ static void thread_func(void *userdata) {
         pa_usec_t now = 0;
 
         size_t writeable = 0;
+
+        if(pa_mainloop_iterate(u->mainloop, 1, &u->mainloop_ret) < 0) {
+            goto fail;
+        }
 
         if (PA_UNLIKELY(u->sink->thread_info.rewind_requested))
             pa_sink_process_rewind(u->sink, 0);
@@ -166,6 +196,10 @@ fail:
     pa_asyncmsgq_wait_for(u->thread_mq.inq, PA_MESSAGE_SHUTDOWN);
 
 finish:
+
+    if(u->mainloop)
+        pa_mainloop_free(u->mainloop);
+
     pa_log_debug("Thread shutting down");
 }
 
@@ -374,22 +408,6 @@ int pa__init(pa_module*m) {
     pa_sink_set_max_request(u->sink, nbytes);
     pa_sink_set_latency_range(u->sink, 0, BLOCK_USEC); */
 
-    /* TODO: think about volume stuff remote<--stream--source */
-    proplist = pa_proplist_new();
-    pa_proplist_sets(proplist, PA_PROP_APPLICATION_NAME, _("PulseAudio mod-tunnelstream"));
-    pa_proplist_sets(proplist, PA_PROP_APPLICATION_ID, "mod-tunnelstream");
-    pa_proplist_sets(proplist, PA_PROP_APPLICATION_ICON_NAME, "audio-card");
-    pa_proplist_sets(proplist, PA_PROP_APPLICATION_VERSION, PACKAGE_VERSION);
-
-    /* init libpulse */
-    if (!(u->context = pa_context_new_with_proplist(m->core->mainloop,
-                                              "tunnelstream",
-                                              proplist))) {
-        pa_log("Failed to create libpulse context");
-        goto fail;
-    }
-
-    pa_proplist_free(proplist);
 
     pa_context_set_state_callback(u->context, context_state_callback, u);
     if (pa_context_connect(u->context,

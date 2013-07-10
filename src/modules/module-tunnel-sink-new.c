@@ -321,6 +321,16 @@ static int sink_process_msg_cb(pa_msgobject *o, int code, void *data, int64_t of
                 return 0;
             }
 
+            if(!u->stream) {
+                *((pa_usec_t*) data) = 0;
+                return 0;
+            }
+
+            if(!PA_STREAM_IS_GOOD(pa_stream_get_state(u->stream))) {
+                *((pa_usec_t*) data) = 0;
+                return 0;
+            }
+
             if(pa_stream_get_latency(u->stream, &remote_latency, &negative) < 0) {
                 *((pa_usec_t*) data) = 0;
                 return 0;

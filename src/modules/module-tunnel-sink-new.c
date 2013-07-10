@@ -81,6 +81,8 @@ struct userdata {
 
     pa_mainloop *mainloop;
     int mainloop_ret;
+
+    const char *remote_server;
 };
 
 static const char* const valid_modargs[] = {
@@ -360,6 +362,7 @@ int pa__init(pa_module*m) {
     u = pa_xnew0(struct userdata, 1);
     u->module = m;
     m->userdata = u;
+    u->remote_server = strdup(remote_server);
     pa_memchunk_reset(&u->memchunk);
     u->rtpoll = pa_rtpoll_new();
     pa_thread_mq_init(&u->thread_mq, m->core->mainloop, u->rtpoll);
@@ -457,6 +460,9 @@ void pa__done(pa_module*m) {
     }
 
     pa_thread_mq_done(&u->thread_mq);
+
+    if(u->remote_server)
+        free((void *) u->remote_server);
 
     if (u->stream)
         pa_stream_disconnect(u->stream);

@@ -76,19 +76,57 @@ static void asyncmsgq_write_cb(pa_mainloop_api*api, pa_io_event* e, int fd, pa_i
     pa_asyncmsgq_write_before_poll(q->inq);
 }
 
-void pa_thread_mq_init(pa_thread_mq *q, pa_mainloop_api *mainloop, pa_rtpoll *rtpoll) {
+/* used to setup mainloop io objects + mainloop callbacks */
+static void pa_thread_mq_init_mainloop(pa_thread_mq *q, pa_mainloop_api *mainloop) {
     pa_assert(q);
     pa_assert(mainloop);
-
     q->mainloop = mainloop;
-    pa_assert_se(q->inq = pa_asyncmsgq_new(0));
-    pa_assert_se(q->outq = pa_asyncmsgq_new(0));
 
     pa_assert_se(pa_asyncmsgq_read_before_poll(q->outq) == 0);
     pa_assert_se(q->read_event = mainloop->io_new(mainloop, pa_asyncmsgq_read_fd(q->outq), PA_IO_EVENT_INPUT, asyncmsgq_read_cb, q));
 
     pa_asyncmsgq_write_before_poll(q->inq);
     pa_assert_se(q->write_event = mainloop->io_new(mainloop, pa_asyncmsgq_write_fd(q->inq), PA_IO_EVENT_INPUT, asyncmsgq_write_cb, q));
+
+    q->rt_mainloop_tmq = NULL;
+}
+
+/* IO Context should be used when you use within your module also a mainloop */
+void pa_thread_mq_init_rtmainloop_post(pa_thread_mq *q, pa_thread_mq *rt_q, pa_mainloop_api *rt_mainloop) {
+    pa_assert(q);
+    pa_assert(rt_mainloop);
+    pa_assert(q->inq);
+    pa_assert(q->outq);
+    pa_assert(q->mainloop);
+    pa_assert(!q->rt_mainloop_tmq);
+
+    q->rt_mainloop_tmq = rt_q;
+    /* swapping inq/outq */
+    rt_q->inq = q->outq;
+    rt_q->outq = q->inq;
+
+    pa_thread_mq_init_mainloop(rt_q, rt_mainloop);
+}
+
+void pa_thread_mq_init_rtmainloop_pre(pa_thread_mq *q, pa_mainloop_api *mainloop) {
+    pa_assert(q);
+    pa_assert(mainloop);
+
+    pa_assert_se(q->inq = pa_asyncmsgq_new(0));
+    pa_assert_se(q->outq = pa_asyncmsgq_new(0));
+
+    pa_thread_mq_init_mainloop(q, mainloop);
+}
+
+/* should be used when using a rt_poll as module threading loop */
+void pa_thread_mq_init(pa_thread_mq *q, pa_mainloop_api *mainloop, pa_rtpoll *rtpoll) {
+    pa_assert(q);
+    pa_assert(mainloop);
+
+    pa_assert_se(q->inq = pa_asyncmsgq_new(0));
+    pa_assert_se(q->outq = pa_asyncmsgq_new(0));
+
+    pa_thread_mq_init_mainloop(q, mainloop);
 
     pa_rtpoll_item_new_asyncmsgq_read(rtpoll, PA_RTPOLL_EARLY, q->inq);
     pa_rtpoll_item_new_asyncmsgq_write(rtpoll, PA_RTPOLL_LATE, q->outq);
@@ -109,6 +147,12 @@ void pa_thread_mq_done(pa_thread_mq *q) {
     q->mainloop->io_free(q->read_event);
     q->mainloop->io_free(q->write_event);
     q->read_event = q->write_event = NULL;
+
+    if(q->rt_mainloop_tmq) {
+        q->rt_mainloop_tmq->mainloop->io_free(q->rt_mainloop_tmq->read_event);
+        q->rt_mainloop_tmq->mainloop->io_free(q->rt_mainloop_tmq->write_event);
+        q->rt_mainloop_tmq->read_event = q->rt_mainloop_tmq->write_event = NULL;
+    }
 
     pa_asyncmsgq_unref(q->inq);
     pa_asyncmsgq_unref(q->outq);

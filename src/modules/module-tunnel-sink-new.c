@@ -128,6 +128,16 @@ static void thread_func(void *userdata) {
         pa_log("Failed to create libpulse context");
         goto fail;
     }
+
+    pa_context_set_state_callback(u->context, context_state_callback, u);
+    if (pa_context_connect(u->context,
+                          u->remote_server,
+                          PA_CONTEXT_NOFAIL | PA_CONTEXT_NOAUTOSPAWN,
+                          NULL) < 0) {
+        pa_log("Failed to connect libpulse context");
+        goto fail;
+    }
+
     pa_proplist_free(proplist);
 
     for(;;)
@@ -411,15 +421,6 @@ int pa__init(pa_module*m) {
     pa_sink_set_max_request(u->sink, nbytes);
     pa_sink_set_latency_range(u->sink, 0, BLOCK_USEC); */
 
-
-    pa_context_set_state_callback(u->context, context_state_callback, u);
-    if (pa_context_connect(u->context,
-                          remote_server,
-                          PA_CONTEXT_NOFAIL | PA_CONTEXT_NOAUTOSPAWN,
-                          NULL) < 0) {
-        pa_log("Failed to connect libpulse context");
-        goto fail;
-    }
 
     if (!(u->thread = pa_thread_new("tunnelstream-sink", thread_func, u))) {
         pa_log("Failed to create thread.");

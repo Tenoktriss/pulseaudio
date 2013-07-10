@@ -62,7 +62,8 @@ struct userdata {
 
     pa_sink *sink;
     pa_rtpoll *rtpoll;
-    pa_thread_mq thread_mq;
+    pa_thread_mq thread_mq_main;
+    pa_thread_mq thread_mq_rt;
     pa_thread *thread;
 
     pa_memchunk memchunk;
@@ -79,7 +80,7 @@ struct userdata {
 
     bool connected;
 
-    pa_mainloop *mainloop;
+    pa_mainloop *rt_mainloop;
     int mainloop_ret;
 
     const char *remote_server;
@@ -105,15 +106,18 @@ static void thread_func(void *userdata) {
 
     pa_log_debug("Tunnelstream: Thread starting up");
 
-    pa_thread_mq_install(&u->thread_mq);
-    u->timestamp = pa_rtclock_now();
-
-    u->mainloop = pa_mainloop_new();
-
-    if(u->mainloop == NULL) {
+    u->rt_mainloop = pa_mainloop_new();
+    if(u->rt_mainloop == NULL) {
         pa_log("Failed to create mainloop");
         goto fail;
     }
+
+    pa_thread_mq_init_rtmainloop_post(&u->thread_mq_main, &u->thread_mq_rt, pa_mainloop_get_api(u->rt_mainloop));
+    pa_thread_mq_install(&u->thread_mq_main);
+
+
+    u->timestamp = pa_rtclock_now();
+
     /* TODO: think about volume stuff remote<--stream--source */
     proplist = pa_proplist_new();
     pa_proplist_sets(proplist, PA_PROP_APPLICATION_NAME, _("PulseAudio mod-tunnelstream"));
@@ -122,7 +126,7 @@ static void thread_func(void *userdata) {
     pa_proplist_sets(proplist, PA_PROP_APPLICATION_VERSION, PACKAGE_VERSION);
 
     /* init libpulse */
-    if (!(u->context = pa_context_new_with_proplist(pa_mainloop_get_api(u->mainloop),
+    if (!(u->context = pa_context_new_with_proplist(pa_mainloop_get_api(u->rt_mainloop),
                                               "tunnelstream",
                                               proplist))) {
         pa_log("Failed to create libpulse context");
@@ -148,7 +152,7 @@ static void thread_func(void *userdata) {
 
         size_t writeable = 0;
 
-        if(pa_mainloop_iterate(u->mainloop, 1, &u->mainloop_ret) < 0) {
+        if(pa_mainloop_iterate(u->rt_mainloop, 0, &u->mainloop_ret) < 0) {
             goto fail;
         }
 
@@ -204,13 +208,13 @@ static void thread_func(void *userdata) {
 fail:
     /* If this was no regular exit from the loop we have to continue
      * processing messages until we received PA_MESSAGE_SHUTDOWN */
-    pa_asyncmsgq_post(u->thread_mq.outq, PA_MSGOBJECT(u->module->core), PA_CORE_MESSAGE_UNLOAD_MODULE, u->module, 0, NULL, NULL);
-    pa_asyncmsgq_wait_for(u->thread_mq.inq, PA_MESSAGE_SHUTDOWN);
+    pa_asyncmsgq_post(u->thread_mq_main.outq, PA_MSGOBJECT(u->module->core), PA_CORE_MESSAGE_UNLOAD_MODULE, u->module, 0, NULL, NULL);
+    pa_asyncmsgq_wait_for(u->thread_mq_main.inq, PA_MESSAGE_SHUTDOWN);
 
 finish:
 
-    if(u->mainloop)
-        pa_mainloop_free(u->mainloop);
+    if(u->rt_mainloop)
+        pa_mainloop_free(u->rt_mainloop);
 
     pa_log_debug("Thread shutting down");
 }
@@ -286,7 +290,7 @@ static void context_state_callback(pa_context *c, void *userdata) {
                                        NULL,
                                        NULL);
 
-            pa_asyncmsgq_post(u->thread_mq.inq, PA_MSGOBJECT(u->sink), SINK_MESSAGE_PASS_SOCKET, NULL, 0, NULL, NULL);
+            pa_asyncmsgq_post(u->thread_mq_main.inq, PA_MSGOBJECT(u->sink), SINK_MESSAGE_PASS_SOCKET, NULL, 0, NULL, NULL);
             break;
         }
         case PA_CONTEXT_FAILED:
@@ -385,7 +389,7 @@ int pa__init(pa_module*m) {
     u->remote_server = strdup(remote_server);
     pa_memchunk_reset(&u->memchunk);
     u->rtpoll = pa_rtpoll_new();
-    pa_thread_mq_init(&u->thread_mq, m->core->mainloop, u->rtpoll);
+    pa_thread_mq_init_rtmainloop_pre(&u->thread_mq_main, m->core->mainloop);
 
     /* Create sink */
     pa_sink_new_data_init(&sink_data);
@@ -420,8 +424,7 @@ int pa__init(pa_module*m) {
 
 
     /* set thread queue */
-    pa_sink_set_asyncmsgq(u->sink, u->thread_mq.inq);
-    pa_sink_set_rtpoll(u->sink, u->rtpoll);
+    pa_sink_set_asyncmsgq(u->sink, u->thread_mq_main.inq);
 
     /* TODO: latency / rewind
     u->sink->update_requested_latency = sink_update_requested_latency_cb;
@@ -466,11 +469,11 @@ void pa__done(pa_module*m) {
         pa_sink_unlink(u->sink);
 
     if (u->thread) {
-        pa_asyncmsgq_send(u->thread_mq.inq, NULL, PA_MESSAGE_SHUTDOWN, NULL, 0, NULL);
+        pa_asyncmsgq_send(u->thread_mq_main.inq, NULL, PA_MESSAGE_SHUTDOWN, NULL, 0, NULL);
         pa_thread_free(u->thread);
     }
 
-    pa_thread_mq_done(&u->thread_mq);
+    pa_thread_mq_done(&u->thread_mq_main);
 
     if(u->remote_server)
         free((void *) u->remote_server);

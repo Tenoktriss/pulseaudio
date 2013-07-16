@@ -101,6 +101,7 @@ enum {
 static void thread_func(void *userdata) {
     struct userdata *u = userdata;
     pa_proplist *proplist;
+    pa_mainloop_api *rt_mainloop;
 
     pa_assert(u);
 
@@ -112,7 +113,10 @@ static void thread_func(void *userdata) {
         goto fail;
     }
 
-    pa_thread_mq_init_rtmainloop_post(&u->thread_mq, &u->thread_mq_rt_shadow, pa_mainloop_get_api(u->rt_mainloop));
+    rt_mainloop = pa_mainloop_get_api(u->rt_mainloop);
+    pa_log("rt_mainloop_api : %p", rt_mainloop );
+
+    pa_thread_mq_init_rtmainloop_post(&u->thread_mq, &u->thread_mq_rt_shadow, rt_mainloop);
     pa_thread_mq_install(&u->thread_mq);
 
 
@@ -204,6 +208,7 @@ static void thread_func(void *userdata) {
 fail:
     /* If this was no regular exit from the loop we have to continue
      * processing messages until we received PA_MESSAGE_SHUTDOWN */
+    pa_asyncmsgq_flush(u->thread_mq.inq, FALSE);
     pa_asyncmsgq_post(u->thread_mq.outq, PA_MSGOBJECT(u->module->core), PA_CORE_MESSAGE_UNLOAD_MODULE, u->module, 0, NULL, NULL);
     pa_asyncmsgq_wait_for(u->thread_mq.inq, PA_MESSAGE_SHUTDOWN);
 

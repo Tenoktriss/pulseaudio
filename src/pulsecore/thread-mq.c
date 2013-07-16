@@ -105,7 +105,10 @@ void pa_thread_mq_init_rtmainloop_post(pa_thread_mq *q, pa_thread_mq *rt_q, pa_m
     rt_q->inq = q->outq;
     rt_q->outq = q->inq;
 
-    pa_thread_mq_init_mainloop(rt_q, rt_mainloop);
+    rt_q->mainloop = rt_mainloop;
+
+    pa_assert_se(rt_q->read_event = rt_mainloop->io_new(rt_mainloop, pa_asyncmsgq_read_fd(rt_q->outq), PA_IO_EVENT_INPUT, asyncmsgq_read_cb, rt_q));
+    pa_assert_se(rt_q->write_event = rt_mainloop->io_new(rt_mainloop, pa_asyncmsgq_write_fd(rt_q->inq), PA_IO_EVENT_INPUT, asyncmsgq_write_cb, rt_q));
 }
 
 void pa_thread_mq_init_rtmainloop_pre(pa_thread_mq *q, pa_mainloop_api *mainloop) {

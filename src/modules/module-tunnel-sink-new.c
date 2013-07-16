@@ -62,8 +62,8 @@ struct userdata {
 
     pa_sink *sink;
     pa_rtpoll *rtpoll;
-    pa_thread_mq thread_mq_main;
-    pa_thread_mq thread_mq_rt;
+    pa_thread_mq thread_mq;
+    pa_thread_mq thread_mq_rt_shadow; /* same as thread_mq but has swapped inq/outq and own io_events */
     pa_thread *thread;
 
     pa_memchunk memchunk;
@@ -112,11 +112,13 @@ static void thread_func(void *userdata) {
         goto fail;
     }
 
-    pa_thread_mq_init_rtmainloop_post(&u->thread_mq_main, &u->thread_mq_rt, pa_mainloop_get_api(u->rt_mainloop));
-    pa_thread_mq_install(&u->thread_mq_main);
+    pa_thread_mq_init_rtmainloop_post(&u->thread_mq, &u->thread_mq_rt_shadow, pa_mainloop_get_api(u->rt_mainloop));
+    pa_thread_mq_install(&u->thread_mq);
 
 
     u->timestamp = pa_rtclock_now();
+
+
 
     /* TODO: think about volume stuff remote<--stream--source */
     proplist = pa_proplist_new();
@@ -198,18 +200,12 @@ static void thread_func(void *userdata) {
                 }
             }
         }
-        if ((ret = pa_rtpoll_run(u->rtpoll, TRUE)) < 0)
-            goto fail;
-
-        if (ret == 0)
-            goto finish;
-
     }
 fail:
     /* If this was no regular exit from the loop we have to continue
      * processing messages until we received PA_MESSAGE_SHUTDOWN */
-    pa_asyncmsgq_post(u->thread_mq_main.outq, PA_MSGOBJECT(u->module->core), PA_CORE_MESSAGE_UNLOAD_MODULE, u->module, 0, NULL, NULL);
-    pa_asyncmsgq_wait_for(u->thread_mq_main.inq, PA_MESSAGE_SHUTDOWN);
+    pa_asyncmsgq_post(u->thread_mq.outq, PA_MSGOBJECT(u->module->core), PA_CORE_MESSAGE_UNLOAD_MODULE, u->module, 0, NULL, NULL);
+    pa_asyncmsgq_wait_for(u->thread_mq.inq, PA_MESSAGE_SHUTDOWN);
 
 finish:
 
@@ -244,6 +240,7 @@ static void stream_state_callback(pa_stream *stream, void *userdata) {
 
 static void context_state_callback(pa_context *c, void *userdata) {
     struct userdata *u = userdata;
+    int c_errno;
 
     pa_assert(u);
     pa_assert(u->context == c);
@@ -290,10 +287,11 @@ static void context_state_callback(pa_context *c, void *userdata) {
                                        NULL,
                                        NULL);
 
-            pa_asyncmsgq_post(u->thread_mq_main.inq, PA_MSGOBJECT(u->sink), SINK_MESSAGE_PASS_SOCKET, NULL, 0, NULL, NULL);
+            pa_asyncmsgq_post(u->thread_mq.inq, PA_MSGOBJECT(u->sink), SINK_MESSAGE_PASS_SOCKET, NULL, 0, NULL, NULL);
             break;
         }
         case PA_CONTEXT_FAILED:
+            c_errno = pa_context_errno(u->context);
             pa_log_debug("Context failed.");
             pa_context_unref(u->context);
             u->context = NULL;
@@ -301,6 +299,7 @@ static void context_state_callback(pa_context *c, void *userdata) {
             break;
 
         case PA_CONTEXT_TERMINATED:
+            c_errno = pa_context_errno(u->context);
             pa_log_debug("Context terminated.");
             pa_context_unref(u->context);
             u->context = NULL;
@@ -389,7 +388,7 @@ int pa__init(pa_module*m) {
     u->remote_server = strdup(remote_server);
     pa_memchunk_reset(&u->memchunk);
     u->rtpoll = pa_rtpoll_new();
-    pa_thread_mq_init_rtmainloop_pre(&u->thread_mq_main, m->core->mainloop);
+    pa_thread_mq_init_rtmainloop_pre(&u->thread_mq, m->core->mainloop);
 
     /* Create sink */
     pa_sink_new_data_init(&sink_data);
@@ -424,7 +423,7 @@ int pa__init(pa_module*m) {
 
 
     /* set thread queue */
-    pa_sink_set_asyncmsgq(u->sink, u->thread_mq_main.inq);
+    pa_sink_set_asyncmsgq(u->sink, u->thread_mq.inq);
 
     /* TODO: latency / rewind
     u->sink->update_requested_latency = sink_update_requested_latency_cb;
@@ -469,11 +468,11 @@ void pa__done(pa_module*m) {
         pa_sink_unlink(u->sink);
 
     if (u->thread) {
-        pa_asyncmsgq_send(u->thread_mq_main.inq, NULL, PA_MESSAGE_SHUTDOWN, NULL, 0, NULL);
+        pa_asyncmsgq_send(u->thread_mq.inq, NULL, PA_MESSAGE_SHUTDOWN, NULL, 0, NULL);
         pa_thread_free(u->thread);
     }
 
-    pa_thread_mq_done(&u->thread_mq_main);
+    pa_thread_mq_done(&u->thread_mq);
 
     if(u->remote_server)
         free((void *) u->remote_server);

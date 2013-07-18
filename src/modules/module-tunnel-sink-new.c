@@ -107,16 +107,9 @@ static void thread_func(void *userdata) {
 
     pa_log_debug("Tunnelstream: Thread starting up");
 
-    u->rt_mainloop = pa_mainloop_new();
-    if(u->rt_mainloop == NULL) {
-        pa_log("Failed to create mainloop");
-        goto fail;
-    }
-
     rt_mainloop = pa_mainloop_get_api(u->rt_mainloop);
     pa_log("rt_mainloop_api : %p", rt_mainloop );
 
-    pa_thread_mq_init_rtmainloop_post(&u->thread_mq, &u->thread_mq_rt_shadow, rt_mainloop);
     pa_thread_mq_install(&u->thread_mq);
 
 
@@ -158,7 +151,7 @@ static void thread_func(void *userdata) {
 
         size_t writeable = 0;
 
-        if(pa_mainloop_iterate(u->rt_mainloop, 0, &u->mainloop_ret) < 0) {
+        if(pa_mainloop_iterate(u->rt_mainloop, 1, &u->mainloop_ret) < 0) {
             goto fail;
         }
 
@@ -393,7 +386,13 @@ int pa__init(pa_module*m) {
     u->remote_server = strdup(remote_server);
     pa_memchunk_reset(&u->memchunk);
     u->rtpoll = pa_rtpoll_new();
-    pa_thread_mq_init_rtmainloop_pre(&u->thread_mq, m->core->mainloop);
+    u->rt_mainloop = pa_mainloop_new();
+    if(u->rt_mainloop == NULL) {
+        pa_log("Failed to create mainloop");
+        goto fail;
+    }
+
+    pa_thread_mq_init_rtmainloop(&u->thread_mq, m->core->mainloop, pa_mainloop_get_api(u->rt_mainloop));
 
     /* Create sink */
     pa_sink_new_data_init(&sink_data);

@@ -152,7 +152,11 @@ static void thread_func(void *userdata) {
         size_t writeable = 0;
 
         if(pa_mainloop_iterate(u->rt_mainloop, 1, &u->mainloop_ret) < 0) {
-            goto fail;
+            if(u->mainloop_ret == 0)
+                goto finish;
+            else
+                goto fail;
+
         }
 
         if (PA_UNLIKELY(u->sink->thread_info.rewind_requested))

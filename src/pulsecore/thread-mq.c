@@ -30,6 +30,8 @@
 #include <pulsecore/semaphore.h>
 #include <pulsecore/macro.h>
 
+#include <pulse/mainloop-api.h>
+
 #include "thread-mq.h"
 
 PA_STATIC_TLS_DECLARE_NO_FREE(thread_mq);
@@ -54,6 +56,12 @@ static void asyncmsgq_read_inq_cb(pa_mainloop_api*api, pa_io_event* e, int fd, p
         /* Check whether there is a message for us to process */
         while (pa_asyncmsgq_get(aq, &object, &code, &data, &offset, &chunk, 0) >= 0) {
             int ret;
+
+            if (!object && code == PA_MESSAGE_SHUTDOWN) {
+                pa_asyncmsgq_done(aq, 0);
+                api->quit(api, 0);
+                break;
+            }
 
             ret = pa_asyncmsgq_dispatch(object, code, data, offset, &chunk);
             pa_asyncmsgq_done(aq, ret);

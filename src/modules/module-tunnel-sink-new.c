@@ -210,6 +210,13 @@ fail:
     pa_asyncmsgq_wait_for(u->thread_mq.inq, PA_MESSAGE_SHUTDOWN);
 
 finish:
+    pa_asyncmsgq_flush(u->thread_mq.inq, FALSE);
+
+    if (u->stream)
+        pa_stream_disconnect(u->stream);
+
+    if (u->context)
+        pa_context_disconnect(u->context);
 
     if(u->rt_mainloop)
         pa_mainloop_free(u->rt_mainloop);
@@ -295,17 +302,17 @@ static void context_state_callback(pa_context *c, void *userdata) {
         case PA_CONTEXT_FAILED:
             c_errno = pa_context_errno(u->context);
             pa_log_debug("Context failed.");
+            u->connected = false;
             pa_context_unref(u->context);
             u->context = NULL;
-            u->connected = false;
             break;
 
         case PA_CONTEXT_TERMINATED:
             c_errno = pa_context_errno(u->context);
             pa_log_debug("Context terminated.");
+            u->connected = false;
             pa_context_unref(u->context);
             u->context = NULL;
-            u->connected = false;
             break;
         default:
             break;
@@ -485,11 +492,6 @@ void pa__done(pa_module*m) {
     if(u->remote_server)
         free((void *) u->remote_server);
 
-    if (u->stream)
-        pa_stream_disconnect(u->stream);
-
-    if (u->context)
-        pa_context_disconnect(u->context);
 
     if (u->rtpoll)
         pa_rtpoll_free(u->rtpoll);

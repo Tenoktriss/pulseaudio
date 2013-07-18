@@ -566,6 +566,8 @@ src/pulsecore/mix.h
 src/pulsecore/mix_neon.c
 src/pulsecore/modargs.c
 src/pulsecore/modargs.h
+src/pulsecore/rtmainloop.c
+src/pulsecore/rtmainloop.h
 src/pulsecore/modinfo.c
 src/pulsecore/modinfo.h
 src/pulsecore/module.c

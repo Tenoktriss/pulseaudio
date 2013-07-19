@@ -235,12 +235,16 @@ static void stream_state_callback(pa_stream *stream, void *userdata) {
             pa_log_debug("Context failed.");
             pa_stream_unref(stream);
             u->stream = NULL;
+
             /* TODO: think about killing the context or should we just try again a creationg of a stream ? */
+            pa_context_disconnect(u->context);
             break;
         case PA_STREAM_TERMINATED:
             pa_log_debug("Context terminated.");
             pa_stream_unref(stream);
             u->stream = NULL;
+
+            pa_context_disconnect(u->context);
             break;
         default:
             break;
@@ -305,6 +309,8 @@ static void context_state_callback(pa_context *c, void *userdata) {
             u->connected = false;
             pa_context_unref(u->context);
             u->context = NULL;
+
+            pa_module_unload_request(u->module, FALSE);
             break;
 
         case PA_CONTEXT_TERMINATED:
@@ -313,6 +319,8 @@ static void context_state_callback(pa_context *c, void *userdata) {
             u->connected = false;
             pa_context_unref(u->context);
             u->context = NULL;
+
+            pa_module_unload_request(u->module, FALSE);
             break;
         default:
             break;

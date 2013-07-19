@@ -81,7 +81,6 @@ struct userdata {
     bool connected;
 
     pa_mainloop *rt_mainloop;
-    int mainloop_ret;
 
     const char *remote_server;
 };
@@ -151,8 +150,8 @@ static void thread_func(void *userdata) {
 
         size_t writeable = 0;
 
-        if(pa_mainloop_iterate(u->rt_mainloop, 1, &u->mainloop_ret) < 0) {
-            if(u->mainloop_ret == 0)
+        if(pa_mainloop_iterate(u->rt_mainloop, 1, &ret) < 0) {
+            if(ret == 0)
                 goto finish;
             else
                 goto fail;

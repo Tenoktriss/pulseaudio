@@ -161,17 +161,6 @@ void pa_thread_mq_init_rtmainloop(pa_thread_mq *q, pa_mainloop_api *mainloop, pa
 
 }
 
-
-static void asyncmsgq_write_cb_only_for_thread(pa_mainloop_api*api, pa_io_event* e, int fd, pa_io_event_flags_t events, void *userdata) {
-    asyncmsgq_write_inq_cb(api, e, fd, events, userdata);
-}
-
-static void asyncmsgq_read_cb_only_for_thread(pa_mainloop_api*api, pa_io_event* e, int fd, pa_io_event_flags_t events, void *userdata) {
-    asyncmsgq_read_outq_cb(api, e, fd, events, userdata);
-}
-
-/* IO Context should be used when you use within your module also a mainloop */
-
 /* should be used when using a rt_poll as module threading loop */
 void pa_thread_mq_init(pa_thread_mq *q, pa_mainloop_api *mainloop, pa_rtpoll *rtpoll) {
     pa_assert(q);

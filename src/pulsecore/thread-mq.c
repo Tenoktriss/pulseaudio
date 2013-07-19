@@ -202,6 +202,12 @@ void pa_thread_mq_done(pa_thread_mq *q) {
     q->mainloop->io_free(q->write_main_event);
     q->read_main_event = q->write_main_event = NULL;
 
+    if(q->rtmainloop) {
+        q->rtmainloop->io_free(q->read_thread_event);
+        q->rtmainloop->io_free(q->write_thread_event);
+        q->read_thread_event = q->write_thread_event = NULL;
+    }
+
     pa_asyncmsgq_unref(q->inq);
     pa_asyncmsgq_unref(q->outq);
     q->inq = q->outq = NULL;

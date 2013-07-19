@@ -32,6 +32,7 @@
 
 typedef struct pa_thread_mq {
     pa_mainloop_api *mainloop;
+    pa_mainloop_api *rtmainloop;
     pa_asyncmsgq *inq, *outq;
     pa_io_event *read_main_event, *write_main_event;
     pa_io_event *read_thread_event, *write_thread_event;

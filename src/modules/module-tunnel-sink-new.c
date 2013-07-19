@@ -423,7 +423,8 @@ int pa__init(pa_module*m) {
 
     /* TODO: set DEVICE CLASS */
     pa_proplist_sets(sink_data.proplist, PA_PROP_DEVICE_CLASS, "abstract");
-    pa_proplist_sets(sink_data.proplist, PA_PROP_DEVICE_DESCRIPTION, _("Remote Sink of _replace_me"));
+
+    pa_proplist_setf(sink_data.proplist, PA_PROP_DEVICE_DESCRIPTION, "tunnel to remote pulseaudio %s", remote_server);
 
     if (pa_modargs_get_proplist(ma, "sink_properties", sink_data.proplist, PA_UPDATE_REPLACE) < 0) {
         pa_log("Invalid properties");
@@ -442,7 +443,6 @@ int pa__init(pa_module*m) {
 
     /* callbacks */
     u->sink->parent.process_msg = sink_process_msg_cb;
-
 
     /* set thread queue */
     pa_sink_set_asyncmsgq(u->sink, u->thread_mq.inq);
